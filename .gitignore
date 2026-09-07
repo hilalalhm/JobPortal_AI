@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+backend/venv/
+backend/.env
+backend/storage/*
+!backend/storage/.gitkeep
+
+# Data pengguna / CV (privasi)
+storage/
+backend/storage/cv/
+backend/storage/profile.json
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# lainnya
+.DS_Store
