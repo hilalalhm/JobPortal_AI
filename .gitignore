@@ -18,3 +18,4 @@ frontend/.vite/
 
 # lainnya
 .DS_Store
+deploy/*.zip
