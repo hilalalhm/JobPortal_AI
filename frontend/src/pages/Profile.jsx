@@ -161,6 +161,14 @@ function Profile() {
       return
     }
 
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage(
+        "Ukuran CV maksimal 10 MB."
+      )
+
+      return
+    }
+
     setUploading(true)
     setMessage("Mengunggah CV...")
 

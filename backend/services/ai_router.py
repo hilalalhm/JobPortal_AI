@@ -5,6 +5,11 @@ import time
 
 from openai import OpenAI
 
+# Cooldown provider bersifat GLOBAL (module-level) sehingga
+# berlaku untuk semua instance AIRouter dalam satu proses,
+# termasuk lintas request HTTP.
+_COOLDOWNS = {}
+
 
 class AIRouter:
     """
@@ -27,7 +32,6 @@ class AIRouter:
 
     def __init__(self):
         self.providers = []
-        self.cooldowns = {}
 
         self._load_providers()
 
@@ -80,7 +84,7 @@ class AIRouter:
     def _is_available(self, provider):
         name = provider["name"]
 
-        cooldown_until = self.cooldowns.get(
+        cooldown_until = _COOLDOWNS.get(
             name,
             0,
         )
@@ -98,7 +102,7 @@ class AIRouter:
     ):
         name = provider["name"]
 
-        self.cooldowns[name] = (
+        _COOLDOWNS[name] = (
             time.time() + seconds
         )
 

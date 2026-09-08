@@ -1,7 +1,13 @@
+import html
+import io
+import re
+import urllib.error
+import urllib.request
+
 from pathlib import Path
 from typing import Optional
 
-import fitz
+import pymupdf as fitz
 
 from dotenv import load_dotenv
 
@@ -353,6 +359,112 @@ def _extract_cv_text():
 
 
 # ============================================================
+# URL FETCH HELPER
+# ============================================================
+
+def _html_to_text(raw_html):
+    """
+    Ubah HTML mentah menjadi teks polos yang bisa dianalisis.
+    """
+    # Buang <script>/<style> dan konten tak terlihat
+    raw_html = re.sub(
+        r"(?is)<(script|style|noscript|svg)[^>]*>.*?</\1>",
+        "",
+        raw_html,
+    )
+
+    # Ganti tag dengan pemisah baris
+    raw_html = re.sub(r"(?i)<br\s*/?>", "\n", raw_html)
+    raw_html = re.sub(
+        r"(?i)</(p|div|li|h[1-6]|tr|section|article)>",
+        "\n",
+        raw_html,
+    )
+
+    raw_html = re.sub(r"(?s)<[^>]+>", " ", raw_html)
+
+    text = html.unescape(raw_html)
+
+    text = re.sub(r"[ \t\xa0]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n", text)
+
+    return text.strip()
+
+
+def _fetch_url_text(url):
+    """
+    Ambil teks dari sebuah URL (mendukung halaman web biasa).
+    Mengembalikan teks polos; melempar RuntimeError bila gagal.
+    """
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36"
+            ),
+            "Accept": (
+                "text/html,application/xhtml+xml,"
+                "application/json;q=0.9,*/*;q=0.8"
+            ),
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(
+            request,
+            timeout=20,
+        ) as response:
+            raw = response.read(2 * 1024 * 1024)
+            content_type = response.headers.get(
+                "Content-Type",
+                "",
+            )
+            charset = "utf-8"
+
+            match = re.search(
+                r"charset=([\w-]+)",
+                content_type,
+                re.IGNORECASE,
+            )
+
+            if match:
+                charset = match.group(1)
+
+            text = raw.decode(
+                charset,
+                errors="replace",
+            )
+
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        raise RuntimeError(
+            f"Gagal mengakses URL: {error}"
+        ) from error
+
+    if not text.strip():
+        raise RuntimeError(
+            "URL tidak mengembalikan konten."
+        )
+
+    # Deteksi JSON (API) vs HTML
+    stripped = text.lstrip()
+
+    if stripped.startswith("{"):
+        return stripped
+
+    plain_text = _html_to_text(text)
+
+    if len(plain_text) < 20:
+        raise RuntimeError(
+            "URL tidak berisi teks yang bisa "
+            "dianalisis (mungkin perlu JavaScript)."
+        )
+
+    return plain_text
+
+
+# ============================================================
 # APP
 # ============================================================
 
@@ -482,9 +594,21 @@ async def upload_cv(
             "message": "CV must be a PDF file.",
         }
 
-    file_path = CV_DIR / "CV.pdf"
-
     content = await file.read()
+
+    if len(content) > 10 * 1024 * 1024:
+        return {
+            "success": False,
+            "message": "Ukuran CV maksimal 10 MB.",
+        }
+
+    if not content.startswith(b"%PDF"):
+        return {
+            "success": False,
+            "message": "File bukan PDF yang valid.",
+        }
+
+    file_path = CV_DIR / "CV.pdf"
 
     file_path.write_bytes(content)
 
@@ -572,6 +696,32 @@ async def analyze_job_input(
             image_content_type = image.content_type
 
         # ========================================================
+        # URL FETCH
+        # ========================================================
+
+        fetched_text = ""
+
+        if url and url.strip():
+            try:
+                fetched_text = _fetch_url_text(url.strip())
+
+            except RuntimeError as error:
+                return {
+                    "success": False,
+                    "message": str(error),
+                }
+
+            if job_text.strip():
+                job_text = (
+                    job_text.strip()
+                    + "\n\n[Isi halaman sumber]:\n\n"
+                    + fetched_text
+                )
+
+            else:
+                job_text = fetched_text
+
+        # ========================================================
         # VALIDATION
         # ========================================================
 
@@ -579,7 +729,7 @@ async def analyze_job_input(
             return {
                 "success": False,
                 "message": (
-                    "Masukkan job description "
+                    "Masukkan job description, URL, "
                     "atau screenshot lowongan."
                 ),
             }
@@ -753,6 +903,13 @@ def generate_cover_letter(app_id: str):
             "message": str(error),
         }
 
+    # Simpan cover letter ke lamaran agar tidak hilang saat reload
+    if cover_letter:
+        update_application(
+            app_id,
+            {"cover_letter": cover_letter},
+        )
+
     return {
         "success": True,
         "message": "Cover letter berhasil dibuat.",
@@ -810,8 +967,16 @@ def send_application_email(
     # COVER LETTER (body)
     # ========================================================
 
+    persisted_cover_letter = application.get(
+        "cover_letter",
+        "",
+    )
+
     if payload.cover_letter:
         cover_letter = payload.cover_letter
+
+    elif persisted_cover_letter:
+        cover_letter = persisted_cover_letter
 
     else:
         try:
@@ -832,13 +997,20 @@ def send_application_email(
         except Exception as error:
             print("COVER LETTER ERROR:", error)
 
-            return {
-                "success": False,
-                "message": (
-                    "Gagal membuat cover letter: "
-                    f"{error}"
-                ),
-            }
+            # Fallback: tetap kirim dengan body dasar
+            cover_letter = (
+                f"Kepada Yth. Tim Rekrutmen {company},\n\n"
+                f"Saya {name}, ingin mengajukan lamaran "
+                f"untuk posisi {position} di {company}.\n\n"
+                f"Salam hormat,\n{name}"
+            )
+
+        # Simpan agar tersedia di lain waktu
+        if cover_letter:
+            update_application(
+                app_id,
+                {"cover_letter": cover_letter},
+            )
 
     # ========================================================
     # SUBJECT

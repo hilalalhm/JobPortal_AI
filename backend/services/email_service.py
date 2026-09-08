@@ -60,15 +60,25 @@ def send_email(
             filename=attachment_name,
         )
 
-    with smtplib.SMTP(host, port, timeout=30) as server:
-
-        if use_tls:
+    if use_tls:
+        with smtplib.SMTP(host, port, timeout=30) as server:
             server.starttls()
 
-        if user:
-            server.login(user, password)
+            if user:
+                server.login(user, password)
 
-        server.send_message(message)
+            server.send_message(message)
+
+    else:
+        with smtplib.SMTP_SSL(
+            host,
+            port,
+            timeout=30,
+        ) as server:
+            if user:
+                server.login(user, password)
+
+            server.send_message(message)
 
     return {
         "to": to_email,

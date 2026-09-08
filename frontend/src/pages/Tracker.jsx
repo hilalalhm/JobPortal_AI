@@ -20,6 +20,7 @@ const STATUS_COLORS = {
 
 function Tracker() {
   const [applications, setApplications] = useState([])
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState("")
   const [expandedId, setExpandedId] = useState(null)
@@ -36,15 +37,17 @@ function Tracker() {
 
     const load = async () => {
       try {
-        const response = await fetch(
-          `${API_URL}/api/applications`
-        )
+        const [appsResponse, profileResponse] = await Promise.all([
+          fetch(`${API_URL}/api/applications`),
+          fetch(`${API_URL}/api/profile`),
+        ])
 
-        const result = await response.json()
+        const appsResult = await appsResponse.json()
+        const profileResult = await profileResponse.json()
 
-        if (!result.success) {
+        if (!appsResult.success) {
           setMessage(
-            result.message ||
+            appsResult.message ||
             "Gagal memuat daftar lamaran."
           )
 
@@ -52,7 +55,22 @@ function Tracker() {
         }
 
         if (!cancelled) {
-          setApplications(result.data)
+          setApplications(appsResult.data)
+
+          const persisted = {}
+          for (const app of appsResult.data) {
+            if (app.cover_letter) {
+              persisted[app.id] = app.cover_letter
+            }
+          }
+          setCoverLetters((current) => ({
+            ...current,
+            ...persisted,
+          }))
+        }
+
+        if (profileResult.success && !cancelled) {
+          setProfile(profileResult.data)
         }
       } catch (error) {
         console.error("Load error:", error)
@@ -266,7 +284,7 @@ function Tracker() {
     const jobSubject = job.subject || ""
     const defaultSubject =
       jobSubject ||
-      `Lamaran Kerja ${job.position || "posisi"} - Saya`
+      `Lamaran Kerja ${job.position || "posisi"} - ${profile?.name || "Saya"}`
 
     const confirmed = window.confirm(
       contactEmail

@@ -64,6 +64,7 @@ def create_application(job_data, status="saved"):
         "status": status,
         "job": job_data,
         "notes": "",
+        "cover_letter": "",
         "created_at": now,
         "updated_at": now,
     }
@@ -123,6 +124,9 @@ def update_application(app_id, updates):
 
         elif key == "notes":
             application["notes"] = value or ""
+
+        elif key == "cover_letter":
+            application["cover_letter"] = value or ""
 
         elif key == "job":
             application["job"] = value

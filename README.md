@@ -20,15 +20,15 @@ _Analyze job postings — from text, URL, or screenshot — and let AI structure
 
 ### ✔️ Working
 
-- 🤖 **AI Job Analysis** — paste a job description, a URL, and/or a screenshot (`Ctrl+V`, drag & drop, or file picker)
+- 🤖 **AI Job Analysis** — paste a job description, a URL (**fetched & analyzed automatically**), and/or a screenshot (`Ctrl+V`, drag & drop, or file picker)
 - 🔄 **Multi-provider AI with Fallback** — up to 10 providers configured via env; on failure, automatically switches to the next with a **5-minute cooldown**
 - 📋 **Standardized Data Structure** — analysis returns structured JSON: `company`, `position`, `location`, `employment_type`, `salary`, `requirements[]`, `responsibilities[]`, `preferred_qualifications[]`, `contact_email`, `contact_phone`, `deadline`, `source_url`, `other_information[]`
 - 📄 **CV Upload / Parse (PDF)** — store your CV and extract its text (PyMuPDF)
 - 🖥️ **"New Application" UI** — input form + analysis result view + save-application button
 - 🗂️ **Job Tracker** — save analyses to `storage/applications/` (one JSON per application), manage status (`saved`, `applied`, `interview`, `offered`, `rejected`), view details, and delete
 - 👤 **User Profile** — manage name, email, phone, LinkedIn, GitHub (stored in `backend/storage/profile.json`) and upload your CV (PDF) + extract its text
-- ✍️ **AI Cover Letter** — auto-generate application emails per application using profile + CV text + job analysis (from the Job Tracker page, with copy button)
-- 📧 **Send Application Email** — send the cover letter (auto-generated if missing) + CV (PDF) attachment to the job's contact email via SMTP
+- ✍️ **AI Cover Letter** — auto-generate application emails per application using profile + CV text + job analysis (from the Job Tracker page, with copy button). The generated letter is **persisted** to the application, so it survives page reloads.
+- 📧 **Send Application Email** — send the cover letter (auto-generated if missing, with a basic fallback body if AI is unavailable) + CV (PDF) attachment to the job's contact email via SMTP
 
 ### 🚧 Planned / Stub
 
@@ -180,7 +180,7 @@ Notes:
 | PUT    | `/api/profile`                       | Update profile (`name`, `email`, `phone`, `linkedin`, `github`)   |
 | POST   | `/api/profile/cv`                    | Upload CV (PDF required) → `backend/storage/cv/CV.pdf`            |
 | GET    | `/api/profile/cv/text`               | Extract text from CV PDF                                          |
-| POST   | `/api/jobs/analyze-input`            | Analyze job from `text` / `url` / `image` (max 10 MB)             |
+| POST   | `/api/jobs/analyze-input`            | Analyze job from `text` / `url` (auto-fetched) / `image` (max 10 MB) |
 | GET    | `/api/applications`                  | List all applications (newest first)                              |
 | POST   | `/api/applications`                  | Save new application `{ "job": {...}, "status": "saved" }`        |
 | GET    | `/api/applications/{id}`             | Get a single application                                          |
