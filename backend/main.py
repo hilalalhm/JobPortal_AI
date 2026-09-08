@@ -1,5 +1,6 @@
 import html
 import io
+import os
 import re
 import urllib.error
 import urllib.request
@@ -479,12 +480,24 @@ app = FastAPI(
 # CORS
 # ============================================================
 
+DEV_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+
+def _default_cors_origins():
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+
+    if not raw:
+        return DEV_ORIGINS
+
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_default_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
